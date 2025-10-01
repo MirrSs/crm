@@ -1,0 +1,43 @@
+version: '3'
+services:
+
+    main:
+        build:
+            context: .
+            dockerfile: services/main/build/Dockerfile
+        container_name: crm_main
+        entrypoint: bash entrypoint.sh
+        volumes:
+            - ./services/main/src/:/usr/src/app/
+        ports:
+            - "8000:8000"
+        env_file:
+            - .env
+        depends_on:
+            - "main-db"
+            - "minio"
+    main-db:
+        image: postgres:12.0-alpine
+        volumes:
+            - "main_postgres_data:${POSTGRES_DATA}"
+        env_file:
+            - .env
+        ports:
+            - "5432:5432"
+
+    minio:
+        image: docker.io/bitnami/minio:2022
+        ports:
+            - '9000:9000'
+            - '9001:9001'
+        volumes:
+            - 'minio_data:/data'
+        env_file:
+            - .env
+
+volumes:
+    main_postgres_data:
+    minio_data:
+
+
+

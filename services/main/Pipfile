@@ -1,0 +1,39 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+fastapi = { extras = ["all"]  }
+loguru = "*"
+sqlalchemy = "*"
+pyjwt = "*"
+requests = "*"
+alembic = "*"
+asyncpg = "*"
+psycopg2-binary = "*"
+kafka-python = "*"
+passlib = "*"
+python-multipart = "*"
+pillow = "*"
+minio = "*"
+celery = "*"
+redis = "*"
+motor = "*"
+httpx = "*"
+pytest = "*"
+pytest-asyncio = "*"
+pytest-factoryboy = "*"
+aiosqlite = "*"
+aiosqlite3 = "*"
+aioboto3 = "*"
+elasticsearch = "*"
+apscheduler = "*"
+botocore = "*"
+boto3 = "*"
+cryptography = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.11"
