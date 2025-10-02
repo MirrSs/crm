@@ -77,6 +77,20 @@ async def remove_product_from_deal(
         return await DealProductManager.delete(id=item_id, session=session)
 
 
+@deal_items_router.patch("/deals/{deal_id}/products/{item_id}/", response_model=DealProductSchema)
+async def update_deal_product(
+    deal_id: int,
+    item_id: int,
+    body: DealProductSchema,
+    user = Security(AuthService.get_current_user, scopes=["deal-items"]),
+    session: AsyncSession = Depends(get_session),
+) -> DealProductSchema:
+    async with transaction(session):
+        deal = await DealManager.retrieve(id=deal_id, session=session)
+        _ensure_deal_access(deal, user)
+        return await DealProductManager.update(session=session, pk=item_id, input_data=body.model_dump(exclude_unset=True))
+
+
 @deal_items_router.get("/deals/{deal_id}/services/", response_model=ListDealServiceSchema)
 async def get_deal_services(
     deal_id: int,
@@ -126,5 +140,19 @@ async def remove_service_from_deal(
         deal = await DealManager.retrieve(id=deal_id, session=session)
         _ensure_deal_access(deal, user)
         return await DealServiceManager.delete(id=item_id, session=session)
+
+
+@deal_items_router.patch("/deals/{deal_id}/services/{item_id}/", response_model=DealServiceSchema)
+async def update_deal_service(
+    deal_id: int,
+    item_id: int,
+    body: DealServiceSchema,
+    user = Security(AuthService.get_current_user, scopes=["deal-items"]),
+    session: AsyncSession = Depends(get_session),
+) -> DealServiceSchema:
+    async with transaction(session):
+        deal = await DealManager.retrieve(id=deal_id, session=session)
+        _ensure_deal_access(deal, user)
+        return await DealServiceManager.update(session=session, pk=item_id, input_data=body.model_dump(exclude_unset=True))
 
 

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, format, isSameMonth } from 'date-fns'
 import { ru } from 'date-fns/locale'
+import { useRouter } from 'next/navigation'
 
 type Activity = {
   id: number
@@ -40,6 +41,7 @@ export default function CalendarPage() {
   const [deals, setDeals] = useState<Deal[]>([])
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [users, setUsers] = useState<User[]>([])
+  const router = useRouter()
 
   const monthStart = useMemo(() => startOfMonth(viewDate), [viewDate])
   const monthEnd = useMemo(() => endOfMonth(viewDate), [viewDate])
@@ -133,6 +135,29 @@ export default function CalendarPage() {
     setDraggingId(null)
   }
 
+  function openItem(id: string) {
+    if (id.startsWith('act-')) {
+      const num = Number(id.replace('act-',''))
+      router.push(`/activities/${num}`)
+    } else if (id.startsWith('deal-')) {
+      const num = Number(id.replace('deal-',''))
+      router.push(`/deals/${num}`)
+    }
+  }
+
+  async function deleteItem(id: string) {
+    if (!confirm('Удалить запись?')) return
+    if (id.startsWith('act-')) {
+      const num = Number(id.replace('act-',''))
+      await api.delete(`/api/v1/activities/${num}/`)
+      setActivities(prev => prev.filter(a => a.id !== num))
+    } else if (id.startsWith('deal-')) {
+      const num = Number(id.replace('deal-',''))
+      await api.delete(`/api/v1/deals/${num}/`)
+      setDeals(prev => prev.filter(d => d.id !== num))
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 cloud p-3">
@@ -170,9 +195,12 @@ export default function CalendarPage() {
                          draggable
                          onDragStart={(e)=>onDragStart(e, i.id)}>
                       <div>
-                        <div className="font-medium truncate max-w-[140px]">{i.title}</div>
+                        <div className="font-medium truncate max-w-[140px] cursor-pointer hover:underline" onClick={(e)=>{ e.stopPropagation(); openItem(i.id) }}>{i.title}</div>
                         <div className="text-[10px] text-gray-500">{i.kind === 'activity' ? (typeRu[(i.meta as any).type] || (i.meta as any).type) : 'Сделка'} • отв. {userName((i.meta as any).owner_user_id)}</div>
                       </div>
+                      <button className="text-red-500 hover:text-red-700" title="Удалить" onClick={(e)=>{ e.stopPropagation(); deleteItem(i.id) }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3v1H4v2h16V4h-5V3H9zm1 6v9h2V9h-2zm-4 0v9h2V9H6zm8 0v9h2V9h-2z"/></svg>
+                      </button>
                     </div>
                   ))}
                 </div>
