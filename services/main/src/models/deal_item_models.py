@@ -17,6 +17,9 @@ class DealProduct(BaseModel):
     quantity = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, default=1)
     unit_price = sqlalchemy.Column(sqlalchemy.Numeric(12, 2), nullable=True)
     currency = sqlalchemy.Column(sqlalchemy.String(8), nullable=True)
+    # discount applied to this line: type in ['percent', 'amount'] and value numeric
+    discount_type = sqlalchemy.Column(sqlalchemy.String(16), nullable=True)
+    discount_value = sqlalchemy.Column(sqlalchemy.Numeric(12, 2), nullable=True)
 
 
 class DealService(BaseModel):
@@ -32,5 +35,8 @@ class DealService(BaseModel):
     quantity = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, default=1)
     unit_price = sqlalchemy.Column(sqlalchemy.Numeric(12, 2), nullable=True)
     currency = sqlalchemy.Column(sqlalchemy.String(8), nullable=True)
+    # discount applied to this line: type in ['percent', 'amount'] and value numeric
+    discount_type = sqlalchemy.Column(sqlalchemy.String(16), nullable=True)
+    discount_value = sqlalchemy.Column(sqlalchemy.Numeric(12, 2), nullable=True)
 
 

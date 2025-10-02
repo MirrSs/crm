@@ -10,6 +10,8 @@ class CreateDealProductSchema(BaseModel):
     quantity: int = Field(ge=1, default=1)
     unit_price: Optional[float] = None
     currency: Optional[str] = Field(default=None, max_length=8)
+    discount_type: Optional[str] = Field(default=None, max_length=16)
+    discount_value: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -22,6 +24,8 @@ class DealProductSchema(BaseModel):
     quantity: Optional[int] = None
     unit_price: Optional[float] = None
     currency: Optional[str] = None
+    discount_type: Optional[str] = None
+    discount_value: Optional[float] = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -46,6 +50,8 @@ class CreateDealServiceSchema(BaseModel):
     quantity: int = Field(ge=1, default=1)
     unit_price: Optional[float] = None
     currency: Optional[str] = Field(default=None, max_length=8)
+    discount_type: Optional[str] = Field(default=None, max_length=16)
+    discount_value: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -58,6 +64,8 @@ class DealServiceSchema(BaseModel):
     quantity: Optional[int] = None
     unit_price: Optional[float] = None
     currency: Optional[str] = None
+    discount_type: Optional[str] = None
+    discount_value: Optional[float] = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

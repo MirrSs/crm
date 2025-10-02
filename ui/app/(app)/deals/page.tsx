@@ -11,6 +11,8 @@ type Deal = {
   stage_id?: number
   pipeline_id?: number
   owner_user_id?: number
+  created_at?: string
+  expected_close_date?: string
 }
 
 type User = { id: number; name?: string; email?: string }
@@ -118,6 +120,8 @@ export default function DealsPage() {
               <th className="text-left p-3">Пайплайн</th>
               <th className="text-left p-3">Стадия</th>
               <th className="text-left p-3">Ответственный</th>
+              <th className="text-left p-3">Дата создания</th>
+              <th className="text-left p-3">Дата закрытия</th>
             </tr>
           </thead>
           <tbody>
@@ -128,6 +132,8 @@ export default function DealsPage() {
                 <td className="p-3">{pipelineName(d.pipeline_id)}</td>
                 <td className="p-3">{stageName(d.stage_id)}</td>
                 <td className="p-3">{userName(d.owner_user_id)}</td>
+                <td className="p-3">{d.created_at ? new Date(d.created_at).toLocaleString() : '-'}</td>
+                <td className="p-3">{d.expected_close_date ? new Date(d.expected_close_date).toLocaleString() : '-'}</td>
               </tr>
             ))}
           </tbody>

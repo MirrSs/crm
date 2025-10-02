@@ -12,6 +12,9 @@ class Deal(BaseModel):
     currency = sqlalchemy.Column(sqlalchemy.String(8), nullable=True)
     expected_close_date = sqlalchemy.Column(sqlalchemy.Date, nullable=True)
     order_index = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, default=0)
+    # optional order-level discount
+    discount_type = sqlalchemy.Column(sqlalchemy.String(16), nullable=True)
+    discount_value = sqlalchemy.Column(sqlalchemy.Numeric(12, 2), nullable=True)
 
     account_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("accounts.id"), nullable=False

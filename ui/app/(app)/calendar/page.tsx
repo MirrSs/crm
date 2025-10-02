@@ -22,7 +22,9 @@ type Deal = {
   owner_user_id?: number
 }
 
-type User = { id: number; name?: string; email?: string }
+type User = { id: number; name?: string; email?: string; account_id?: number }
+type Pipeline = { id: number; name: string }
+type Stage = { id: number; name: string; pipeline_id: number }
 
 const typeRu: Record<string, string> = {
   task: 'Задача',
@@ -36,11 +38,20 @@ export default function CalendarPage() {
   const [viewDate, setViewDate] = useState<Date>(() => new Date())
   const [mineOnly, setMineOnly] = useState<boolean>(false)
   const [role, setRole] = useState<'owner'|'manager'|'worker'>('worker')
-  const [me, setMe] = useState<{ id: number; name?: string } | null>(null)
+  const [me, setMe] = useState<{ id: number; name?: string; account_id?: number } | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [deals, setDeals] = useState<Deal[]>([])
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [users, setUsers] = useState<User[]>([])
+  const [pipelines, setPipelines] = useState<Pipeline[]>([])
+  const [stages, setStages] = useState<Stage[]>([])
+  const [createDay, setCreateDay] = useState<Date | null>(null)
+  const [chooserOpen, setChooserOpen] = useState<{ dayKey: string } | null>(null)
+  const [modal, setModal] = useState<{ kind: 'deal' | 'activity'; day: Date } | null>(null)
+  const [creating, setCreating] = useState(false)
+  // form state
+  const [newDeal, setNewDeal] = useState<{ name: string; pipeline_id: number | ''; stage_id: number | ''; expected_close_date: string }>({ name: '', pipeline_id: '', stage_id: '', expected_close_date: '' })
+  const [newActivity, setNewActivity] = useState<{ type: string; subject: string; due_at: string }>({ type: 'task', subject: '', due_at: '' })
   const router = useRouter()
 
   const monthStart = useMemo(() => startOfMonth(viewDate), [viewDate])
@@ -73,6 +84,16 @@ export default function CalendarPage() {
     ;(async () => {
       const { data } = await api.get('/api/v1/users/', { params: { page: 1, limit: 100 } })
       setUsers((data as any).users || [])
+      const { data: p } = await api.get('/api/v1/pipelines/', { params: { page: 1, limit: 100 } })
+      const listP: Pipeline[] = (p as any).pipelines || []
+      setPipelines(listP)
+      const fetchedStages: Stage[] = []
+      for (const pl of listP) {
+        const { data: s } = await api.get('/api/v1/stages/', { params: { pipeline_id: pl.id, page: 1, limit: 100 } })
+        const st: Stage[] = ((s as any).stages || []).map((x: any) => ({ ...x, pipeline_id: pl.id }))
+        fetchedStages.push(...st)
+      }
+      setStages(fetchedStages)
     })()
   }, [])
 
@@ -135,6 +156,48 @@ export default function CalendarPage() {
     setDraggingId(null)
   }
 
+  function openChooser(day: Date) {
+    setChooserOpen({ dayKey: format(day, 'yyyy-MM-dd') })
+  }
+  function openCreate(kind: 'deal' | 'activity', day: Date) {
+    setModal({ kind, day })
+    setChooserOpen(null)
+    const dateStr = format(day, kind === 'deal' ? 'yyyy-MM-dd' : "yyyy-MM-dd'T'09:00")
+    if (kind === 'deal') {
+      setNewDeal({ name: '', pipeline_id: pipelines[0]?.id || '', stage_id: stages.filter(s => s.pipeline_id === (pipelines[0]?.id || 0))[0]?.id || '', expected_close_date: dateStr })
+    } else {
+      setNewActivity({ type: 'task', subject: '', due_at: dateStr })
+    }
+  }
+  function closeModal() { setModal(null) }
+
+  async function submitDeal() {
+    if (!modal) return
+    const payload: any = { name: newDeal.name || 'Сделка', pipeline_id: Number(newDeal.pipeline_id), stage_id: Number(newDeal.stage_id), expected_close_date: newDeal.expected_close_date, account_id: me?.account_id, owner_user_id: me?.id }
+    setCreating(true)
+    try {
+      const { data } = await api.post('/api/v1/deals/', payload)
+      // refresh list
+      const paramsDeals: any = { start: format(gridStart, 'yyyy-MM-dd'), end: format(gridEnd, 'yyyy-MM-dd') }
+      const dealsRes = await api.get('/api/v1/deals/upcoming/', { params: paramsDeals })
+      setDeals(((dealsRes.data as any).deals || []) as Deal[])
+      setModal(null)
+    } finally { setCreating(false) }
+  }
+  async function submitActivity() {
+    if (!modal) return
+    const payload: any = { type: newActivity.type, subject: newActivity.subject || undefined, due_at: newActivity.due_at, account_id: me?.account_id, owner_user_id: me?.id }
+    setCreating(true)
+    try {
+      const { data } = await api.post('/api/v1/activities/', payload)
+      const isoNoMs = (d: Date) => format(d, "yyyy-MM-dd'T'HH:mm:ss'Z'")
+      const params: any = { start: isoNoMs(gridStart), end: isoNoMs(gridEnd) }
+      const acts = await api.get('/api/v1/activities/calendar/', { params })
+      setActivities(((acts.data as any).activities || []) as Activity[])
+      setModal(null)
+    } finally { setCreating(false) }
+  }
+
   function openItem(id: string) {
     if (id.startsWith('act-')) {
       const num = Number(id.replace('act-',''))
@@ -184,10 +247,21 @@ export default function CalendarPage() {
             const dayStr = format(day, 'yyyy-MM-dd')
             const dayItems = items.filter(i => i.date.startsWith(dayStr))
             return (
-              <div key={idx} className={`min-h-[120px] p-2 rounded-2xl ${isSameMonth(day, monthStart) ? 'bg-white/70 dark:bg-white/5' : 'bg-white/30 dark:bg-white/5 opacity-70'}`}
+              <div key={idx} className={`min-h-[140px] p-2 rounded-2xl relative ${isSameMonth(day, monthStart) ? 'bg-white/70 dark:bg-white/5' : 'bg-white/30 dark:bg-white/5 opacity-70'}`}
                    onDragOver={onDragOverDay}
                    onDrop={(e)=>onDropToDay(e, day)}>
-                <div className="text-xs text-gray-500 mb-1">{format(day, 'd')}</div>
+                <div className="text-xs text-gray-500 mb-1 flex items-center justify-between">
+                  <span>{format(day, 'd')}</span>
+                  <button className="text-gray-400 hover:text-gray-600" title="Добавить" onClick={(e)=>{ e.stopPropagation(); openChooser(day) }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2z"/></svg>
+                  </button>
+                </div>
+                {chooserOpen?.dayKey === format(day, 'yyyy-MM-dd') && (
+                  <div className="absolute right-2 top-6 z-10 cloud p-2 text-xs space-y-1">
+                    <button className="btn-primary w-full" onClick={()=>openCreate('deal', day)}>Новая сделка</button>
+                    <button className="btn-primary w-full" onClick={()=>openCreate('activity', day)}>Новая активность</button>
+                  </div>
+                )}
                 <div className="space-y-1">
                   {dayItems.map(i => (
                     <div key={i.id}
@@ -209,6 +283,52 @@ export default function CalendarPage() {
           })}
         </div>
       </div>
+      {modal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-20" onClick={closeModal}>
+          <div className="cloud p-4 w-[520px]" onClick={e=>e.stopPropagation()}>
+            {modal.kind === 'deal' ? (
+              <>
+                <div className="font-medium mb-3">Создать сделку</div>
+                <div className="space-y-2 text-sm">
+                  <input className="cloud p-2 w-full" placeholder="Название" value={newDeal.name} onChange={e=>setNewDeal(v=>({ ...v, name: e.target.value }))} />
+                  <div className="flex items-center gap-2">
+                    <select className="cloud p-2" value={newDeal.pipeline_id} onChange={e=>{ const v = e.target.value ? Number(e.target.value) : ''; setNewDeal(nd=>({ ...nd, pipeline_id: v, stage_id: '' })) }}>
+                      <option value="">Выбрать пайплайн</option>
+                      {pipelines.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    <select className="cloud p-2" value={newDeal.stage_id} onChange={e=>setNewDeal(nd=>({ ...nd, stage_id: e.target.value ? Number(e.target.value) : '' }))} disabled={!newDeal.pipeline_id}>
+                      <option value="">Выбрать стадию</option>
+                      {stages.filter(s => (newDeal.pipeline_id ? s.pipeline_id === newDeal.pipeline_id : true)).map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <input className="cloud p-2" type="date" value={newDeal.expected_close_date} onChange={e=>setNewDeal(v=>({ ...v, expected_close_date: e.target.value }))} />
+                </div>
+                <div className="mt-4 flex items-center gap-2">
+                  <button className="btn-primary" disabled={creating || !newDeal.pipeline_id || !newDeal.stage_id} onClick={submitDeal}>Создать</button>
+                  <button className="cloud p-2" onClick={closeModal}>Отмена</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="font-medium mb-3">Создать активность</div>
+                <div className="space-y-2 text-sm">
+                  <select className="cloud p-2" value={newActivity.type} onChange={e=>setNewActivity(v=>({ ...v, type: e.target.value }))}>
+                    {Object.keys(typeRu).map(k => <option key={k} value={k}>{typeRu[k]}</option>)}
+                  </select>
+                  <input className="cloud p-2 w-full" placeholder="Тема" value={newActivity.subject} onChange={e=>setNewActivity(v=>({ ...v, subject: e.target.value }))} />
+                  <input className="cloud p-2 w-full" type="datetime-local" value={newActivity.due_at} onChange={e=>setNewActivity(v=>({ ...v, due_at: e.target.value }))} />
+                </div>
+                <div className="mt-4 flex items-center gap-2">
+                  <button className="btn-primary" disabled={creating} onClick={submitActivity}>Создать</button>
+                  <button className="cloud p-2" onClick={closeModal}>Отмена</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

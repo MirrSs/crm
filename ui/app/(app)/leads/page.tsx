@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 
-type Lead = { id: number; first_name?: string; last_name?: string; email?: string; owner_user_id?: number }
+type Lead = { id: number; first_name?: string; last_name?: string; email?: string; owner_user_id?: number, created_at?: string }
 type User = { id: number; name?: string; email?: string }
 
 export default function LeadsPage() {
@@ -60,6 +60,7 @@ export default function LeadsPage() {
               <th className="text-left p-3">Имя</th>
               <th className="text-left p-3">Email</th>
               <th className="text-left p-3">Ответственный</th>
+              <th className="text-left p-3">Дата создания</th>
             </tr>
           </thead>
           <tbody>
@@ -68,6 +69,7 @@ export default function LeadsPage() {
                 <td className="p-3">{d.first_name} {d.last_name}</td>
                 <td className="p-3">{d.email}</td>
                 <td className="p-3">{userName(d.owner_user_id)}</td>
+                <td className="p-3">{d.created_at ? new Date(d.created_at).toLocaleString() : '-'}</td>
               </tr>
             ))}
           </tbody>

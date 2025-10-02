@@ -3,11 +3,11 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
 
-type Deal = { id: number; name?: string; amount?: number; currency?: string; pipeline_id?: number; stage_id?: number; owner_user_id?: number; company_id?: number; contact_id?: number; expected_close_date?: string }
-type DealProduct = { id: number; product_id: number; quantity: number; unit_price?: number; currency?: string }
-type DealService = { id: number; service_id: number; quantity: number; unit_price?: number; currency?: string }
-type Product = { id: number; name?: string }
-type Service = { id: number; name?: string }
+type Deal = { id: number; name?: string; amount?: number; currency?: string; pipeline_id?: number; stage_id?: number; owner_user_id?: number; company_id?: number; contact_id?: number; expected_close_date?: string; discount_type?: 'percent' | 'amount' | null; discount_value?: number | null }
+type DealProduct = { id: number; product_id: number; quantity: number; unit_price?: number; currency?: string; discount_type?: 'percent' | 'amount' | null; discount_value?: number | null }
+type DealService = { id: number; service_id: number; quantity: number; unit_price?: number; currency?: string; discount_type?: 'percent' | 'amount' | null; discount_value?: number | null }
+type Product = { id: number; name?: string; price?: number; currency?: string }
+type Service = { id: number; name?: string; price?: number; currency?: string }
 type Company = { id: number; name?: string }
 type Contact = { id: number; first_name?: string; last_name?: string }
 type CompanyListItem = { id: number; name?: string }
@@ -34,6 +34,7 @@ export default function DealCardPage() {
   const [users, setUsers] = useState<User[]>([])
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [stages, setStages] = useState<Stage[]>([])
+
   const id = Number(params.id)
 
   useEffect(() => {
@@ -83,11 +84,19 @@ export default function DealCardPage() {
   }
 
   async function addProduct(product_id: number) {
-    const { data } = await api.post(`/api/v1/deals/${id}/products/`, { product_id, quantity: 1 })
+    const p = catalogProducts.find(x => x.id === product_id)
+    const payload: any = { deal_id: id, product_id, quantity: 1 }
+    if (p?.price != null) payload.unit_price = p.price
+    if (p?.currency) payload.currency = p.currency
+    const { data } = await api.post(`/api/v1/deals/${id}/products/`, payload)
     setProducts(prev => [...prev, data as any])
   }
   async function addService(service_id: number) {
-    const { data } = await api.post(`/api/v1/deals/${id}/services/`, { service_id, quantity: 1 })
+    const s = catalogServices.find(x => x.id === service_id)
+    const payload: any = { deal_id: id, service_id, quantity: 1 }
+    if (s?.price != null) payload.unit_price = s.price
+    if (s?.currency) payload.currency = s.currency
+    const { data } = await api.post(`/api/v1/deals/${id}/services/`, payload)
     setServices(prev => [...prev, data as any])
   }
   async function updateProduct(item_id: number, patch: Partial<DealProduct>) {
@@ -117,6 +126,63 @@ export default function DealCardPage() {
     setDeal(data as any)
   }
 
+  function getProductName(id: number) {
+    return catalogProducts.find(p => p.id === id)?.name || `#${id}`
+  }
+  function getProductPrice(id: number) {
+    return catalogProducts.find(p => p.id === id)?.price
+  }
+  function getServiceName(id: number) {
+    return catalogServices.find(s => s.id === id)?.name || `#${id}`
+  }
+  function getServicePrice(id: number) {
+    return catalogServices.find(s => s.id === id)?.price
+  }
+
+  function round2(n: number) { return Math.round(n * 100) / 100 }
+
+  function calcProductLineTotal(item: DealProduct) {
+    const unit = item.unit_price ?? getProductPrice(item.product_id) ?? 0
+    const subtotal = (item.quantity || 0) * unit
+    const dType = item.discount_type
+    const dVal = item.discount_value || 0
+    if (!dType || !dVal) return round2(subtotal)
+    const dval = dType === 'percent' ? subtotal * (dVal / 100) : dVal
+    return round2(Math.max(0, subtotal - dval))
+  }
+  function calcServiceLineTotal(item: DealService) {
+    const unit = item.unit_price ?? getServicePrice(item.service_id) ?? 0
+    const subtotal = (item.quantity || 0) * unit
+    const dType = item.discount_type
+    const dVal = item.discount_value || 0
+    if (!dType || !dVal) return round2(subtotal)
+    const dval = dType === 'percent' ? subtotal * (dVal / 100) : dVal
+    return round2(Math.max(0, subtotal - dval))
+  }
+
+  const summary = (() => {
+    const productsSum = products.reduce((acc, it) => acc + calcProductLineTotal(it), 0)
+    const servicesSum = services.reduce((acc, it) => acc + calcServiceLineTotal(it), 0)
+    const itemsTotal = round2(productsSum + servicesSum)
+    const orderType = deal?.discount_type
+    const orderValue = deal?.discount_value || 0
+    const orderDiscVal = orderType && orderValue ? (orderType === 'percent' ? itemsTotal * (orderValue / 100) : orderValue) : 0
+    const grand = round2(Math.max(0, itemsTotal - orderDiscVal))
+    return { productsSum, servicesSum, itemsTotal, orderDiscVal, grand }
+  })()
+
+  const amountsMatch = deal?.amount != null && Math.abs((deal.amount || 0) - summary.grand) < 0.01
+
+  async function recalcDealAmount() {
+    if (!deal) return
+    // try to keep existing currency, otherwise take from first item
+    let currency = deal.currency
+    if (!currency) {
+      currency = products[0]?.currency || services[0]?.currency || catalogProducts[0]?.currency || catalogServices[0]?.currency || 'RUB'
+    }
+    await updateDealPatch({ amount: summary.grand, currency })
+  }
+
   if (!deal) return <div className="cloud p-4">Загрузка...</div>
 
   return (
@@ -134,7 +200,30 @@ export default function DealCardPage() {
       <div className="cloud p-4 grid grid-cols-2 gap-4 text-sm">
         <div>
           <div className="text-gray-500">Сумма</div>
-          <div>{deal.amount} {deal.currency}</div>
+          <div className="flex items-center gap-2">
+            <input className="cloud p-1 w-28" type="number" step="0.01" value={deal.amount ?? 0}
+              onChange={e=>updateDealPatch({ amount: Number(e.target.value) })} />
+            <input className="cloud p-1 w-20" placeholder="валюта" value={deal.currency || ''}
+              onChange={e=>updateDealPatch({ currency: e.target.value || undefined })} />
+            {amountsMatch ? (
+              <span className="text-green-600" title="Сумма совпадает">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2l-3.5-3.5-1.4 1.4L9 19 20.3 7.7l-1.4-1.4z"/></svg>
+              </span>
+            ) : (
+              <button className="btn-primary" onClick={recalcDealAmount}>Рассчитать цену</button>
+            )}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">Итого по позициям: {summary.itemsTotal.toFixed(2)} {deal.currency || ''}</div>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-xs text-gray-500">Скидка на заказ:</span>
+            <input className="cloud p-1 w-20" type="number" value={deal.discount_value ?? 0}
+              onChange={e=>updateDealPatch({ discount_value: Number(e.target.value) })} />
+            <select className="cloud p-1" value={deal.discount_type || 'amount'} onChange={e=>updateDealPatch({ discount_type: e.target.value as any })}>
+              <option value="amount">сумма</option>
+              <option value="percent">%</option>
+            </select>
+            <span className="text-xs text-gray-500">Итого: {summary.grand.toFixed(2)} {deal.currency || ''}</span>
+          </div>
         </div>
         <div>
           <div className="text-gray-500">Ответственный</div>
@@ -183,18 +272,44 @@ export default function DealCardPage() {
         <div className="flex items-center gap-2 mb-3">
           <select className="cloud p-2" defaultValue="" onChange={e=>{ const v = Number(e.target.value); if (v) addProduct(v) }}>
             <option value="">Добавить продукт...</option>
-            {catalogProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {catalogProducts.map(p => (
+              <option key={p.id} value={p.id}>{p.name}{p.price!=null ? ` — ${p.price} ${p.currency||''}` : ''}</option>
+            ))}
           </select>
         </div>
-        <div className="space-y-2 text-sm">
-          {products.map(item => (
-            <div key={item.id} className="flex items-center gap-2">
-              <div className="w-48">#{item.product_id}</div>
-              <input className="cloud p-1 w-20" type="number" value={item.quantity} onChange={e=>updateProduct(item.id, { quantity: Number(e.target.value) })} />
-              <input className="cloud p-1 w-24" type="number" value={item.unit_price || 0} onChange={e=>updateProduct(item.id, { unit_price: Number(e.target.value) })} />
-              <button className="text-red-500" onClick={()=>removeProduct(item.id)}>Удалить</button>
-            </div>
-          ))}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-white/50">
+              <tr>
+                <th className="text-left p-2">Наименование</th>
+                <th className="text-left p-2">Кол-во</th>
+                <th className="text-left p-2">Цена</th>
+                <th className="text-left p-2">Скидка</th>
+                <th className="text-left p-2">Итого</th>
+                <th className="text-left p-2">Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.map(item => (
+                <tr key={item.id} className="border-t border-white/40">
+                  <td className="p-2">{getProductName(item.product_id)}</td>
+                  <td className="p-2"><input className="cloud p-1 w-20" type="number" value={item.quantity} onChange={e=>updateProduct(item.id, { quantity: Number(e.target.value) })} /></td>
+                  <td className="p-2"><input className="cloud p-1 w-24" type="number" value={item.unit_price ?? getProductPrice(item.product_id) ?? 0} onChange={e=>updateProduct(item.id, { unit_price: Number(e.target.value) })} /></td>
+                  <td className="p-2">
+                    <div className="flex items-center gap-2">
+                      <input className="cloud p-1 w-20" type="number" value={item.discount_value ?? 0} onChange={e=>updateProduct(item.id, { discount_value: Number(e.target.value) })} />
+                      <select className="cloud p-1" value={item.discount_type || 'amount'} onChange={e=>updateProduct(item.id, { discount_type: e.target.value as any })}>
+                        <option value="amount">сумма</option>
+                        <option value="percent">%</option>
+                      </select>
+                    </div>
+                  </td>
+                  <td className="p-2">{calcProductLineTotal(item).toFixed(2)} {deal.currency || ''}</td>
+                  <td className="p-2"><button className="text-red-500" onClick={()=>removeProduct(item.id)}>Удалить</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
       <div className="cloud p-4">
@@ -202,18 +317,44 @@ export default function DealCardPage() {
         <div className="flex items-center gap-2 mb-3">
           <select className="cloud p-2" defaultValue="" onChange={e=>{ const v = Number(e.target.value); if (v) addService(v) }}>
             <option value="">Добавить услугу...</option>
-            {catalogServices.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {catalogServices.map(s => (
+              <option key={s.id} value={s.id}>{s.name}{s.price!=null ? ` — ${s.price} ${s.currency||''}` : ''}</option>
+            ))}
           </select>
         </div>
-        <div className="space-y-2 text-sm">
-          {services.map(item => (
-            <div key={item.id} className="flex items-center gap-2">
-              <div className="w-48">#{item.service_id}</div>
-              <input className="cloud p-1 w-20" type="number" value={item.quantity} onChange={e=>updateService(item.id, { quantity: Number(e.target.value) })} />
-              <input className="cloud p-1 w-24" type="number" value={item.unit_price || 0} onChange={e=>updateService(item.id, { unit_price: Number(e.target.value) })} />
-              <button className="text-red-500" onClick={()=>removeService(item.id)}>Удалить</button>
-            </div>
-          ))}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-white/50">
+              <tr>
+                <th className="text-left p-2">Наименование</th>
+                <th className="text-left p-2">Кол-во</th>
+                <th className="text-left p-2">Цена</th>
+                <th className="text-left p-2">Скидка</th>
+                <th className="text-left p-2">Итого</th>
+                <th className="text-left p-2">Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              {services.map(item => (
+                <tr key={item.id} className="border-t border-white/40">
+                  <td className="p-2">{getServiceName(item.service_id)}</td>
+                  <td className="p-2"><input className="cloud p-1 w-20" type="number" value={item.quantity} onChange={e=>updateService(item.id, { quantity: Number(e.target.value) })} /></td>
+                  <td className="p-2"><input className="cloud p-1 w-24" type="number" value={item.unit_price ?? getServicePrice(item.service_id) ?? 0} onChange={e=>updateService(item.id, { unit_price: Number(e.target.value) })} /></td>
+                  <td className="p-2">
+                    <div className="flex items-center gap-2">
+                      <input className="cloud p-1 w-20" type="number" value={item.discount_value ?? 0} onChange={e=>updateService(item.id, { discount_value: Number(e.target.value) })} />
+                      <select className="cloud p-1" value={item.discount_type || 'amount'} onChange={e=>updateService(item.id, { discount_type: e.target.value as any })}>
+                        <option value="amount">сумма</option>
+                        <option value="percent">%</option>
+                      </select>
+                    </div>
+                  </td>
+                  <td className="p-2">{calcServiceLineTotal(item).toFixed(2)} {deal.currency || ''}</td>
+                  <td className="p-2"><button className="text-red-500" onClick={()=>removeService(item.id)}>Удалить</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

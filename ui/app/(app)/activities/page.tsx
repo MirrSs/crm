@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 
-type Activity = { id: number; type?: string; subject?: string; due_at?: string; completed?: boolean; owner_user_id?: number }
+type Activity = { id: number; type?: string; subject?: string; due_at?: string; completed?: boolean; owner_user_id?: number, created_at?: string }
 type User = { id: number; name?: string; email?: string }
 
 const typeRu: Record<string,string> = {
@@ -75,6 +75,7 @@ export default function ActivitiesPage() {
               <th className="text-left p-3">Срок</th>
               <th className="text-left p-3">Статус</th>
               <th className="text-left p-3">Ответственный</th>
+              <th className="text-left p-3">Дата создания</th>
             </tr>
           </thead>
           <tbody>
@@ -85,6 +86,7 @@ export default function ActivitiesPage() {
                 <td className="p-3">{d.due_at ? new Date(d.due_at).toLocaleString() : '-'}</td>
                 <td className="p-3">{d.completed ? 'Выполнено' : 'Открыта'}</td>
                 <td className="p-3">{userName(d.owner_user_id)}</td>
+                <td className="p-3">{d.created_at ? new Date(d.created_at).toLocaleString() : '-'}</td>
               </tr>
             ))}
           </tbody>

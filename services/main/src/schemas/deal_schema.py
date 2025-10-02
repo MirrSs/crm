@@ -16,6 +16,8 @@ class CreateDealSchema(BaseModel):
     stage_id: int
     owner_user_id: Optional[int] = None
     order_index: Optional[int] = 0
+    discount_type: Optional[str] = Field(default=None, max_length=16)
+    discount_value: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -34,6 +36,8 @@ class DealSchema(BaseModel):
     stage_id: Optional[int] = None
     owner_user_id: Optional[int] = None
     order_index: Optional[int] = None
+    discount_type: Optional[str] = None
+    discount_value: Optional[float] = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
