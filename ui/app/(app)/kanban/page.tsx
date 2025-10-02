@@ -19,7 +19,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { api } from '../../../lib/api'
+import { api } from '@/lib/api'
 
 type Pipeline = { id: number; name: string }
 type Stage = { id: number; name: string; pipeline_id: number; order_index?: number }
@@ -218,7 +218,7 @@ export default function KanbanPage() {
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
           <div className="grid grid-cols-1 gap-6">
             {pipelines.map(p => (
-              <div key={p.id} className="cloud p-4">
+              <div key={p.id} className="">
                 <div className="font-semibold mb-3">{p.name}</div>
                 <div className="grid grid-cols-4 gap-4">
                   {(stagesByPipeline[p.id] || [])

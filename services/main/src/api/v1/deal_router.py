@@ -20,6 +20,26 @@ from datetime import date
 
 deal_router = APIRouter(tags=["deals"])
 
+@deal_router.get("/deals/upcoming/", response_model=ListDealSchema)
+async def get_upcoming_deal_closures(
+    start: date = Query(...),
+    end: date = Query(...),
+    user = Security(AuthService.get_current_user, scopes=["deals"]),
+    page: int = Query(1, ge=1),
+    limit: int = Query(100, le=500),
+    session: AsyncSession = Depends(get_session),
+) -> ListDealSchema:
+    where = [Deal.account_id == user.account_id, Deal.expected_close_date >= start, Deal.expected_close_date <= end]
+    if (user.role or "").lower() == "worker":
+        where.append(Deal.owner_user_id == user.id)
+    result = await DealManager.paginate_list(
+        where=tuple(where), page=page, limit=limit, session=session
+    )
+    return ListDealSchema(
+        pagination=Pagination(limit=result.get("limit"), page=result.get("page"), total=result.get("total")),
+        deals=result.get("items"),
+    )
+
 
 @deal_router.get("/deals/{deal_id}/", response_model=DealSchema)
 async def get_deal(
@@ -149,24 +169,4 @@ async def move_deal(
             input_data={"stage_id": stage_id, "order_index": order_index},
         )
 
-
-@deal_router.get("/deals/upcoming/", response_model=ListDealSchema)
-async def get_upcoming_deal_closures(
-    start: date = Query(...),
-    end: date = Query(...),
-    user = Security(AuthService.get_current_user, scopes=["deals"]),
-    page: int = Query(1, ge=1),
-    limit: int = Query(100, le=500),
-    session: AsyncSession = Depends(get_session),
-) -> ListDealSchema:
-    where = [Deal.account_id == user.account_id, Deal.expected_close_date >= start, Deal.expected_close_date <= end]
-    if (user.role or "").lower() == "worker":
-        where.append(Deal.owner_user_id == user.id)
-    result = await DealManager.paginate_list(
-        where=tuple(where), page=page, limit=limit, session=session
-    )
-    return ListDealSchema(
-        pagination=Pagination(limit=result.get("limit"), page=result.get("page"), total=result.get("total")),
-        deals=result.get("items"),
-    )
 

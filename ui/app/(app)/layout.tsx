@@ -3,7 +3,8 @@ import ThemeToggle from '../theme-toggle'
 import SidebarFooter from '../sidebar-footer'
 
 const nav = [
-  { href: '/kanban', label: 'Канбан' },
+  { href: '/kanban', label: 'Главная' },
+  { href: '/calendar', label: 'Календарь' },
   { href: '/deals', label: 'Сделки' },
   { href: '/leads', label: 'Лиды' },
   { href: '/activities', label: 'Активности' },

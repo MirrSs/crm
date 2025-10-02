@@ -21,6 +21,41 @@ from datetime import datetime, timedelta
 activity_router = APIRouter(tags=["activities"])
 
 
+@activity_router.get("/activities/calendar/", response_model=ListActivitySchema)
+async def get_calendar_activities(
+    start: str = Query(...),
+    end: str = Query(...),
+    completed: Optional[bool] = Query(None),
+    user = Security(AuthService.get_current_user, scopes=["activities"]),
+    page: int = Query(1, ge=1),
+    limit: int = Query(100, le=500),
+    session: AsyncSession = Depends(get_session),
+) -> ListActivitySchema:
+    def _parse_iso_datetime(value: str, default_time: str = "00:00:00") -> datetime:
+        v = value.strip()
+        if len(v) == 10 and v.count('-') == 2 and 'T' not in v:
+            v = f"{v}T{default_time}"
+        if v.endswith('Z'):
+            v = v[:-1]
+        return datetime.fromisoformat(v)
+
+    start_dt = _parse_iso_datetime(start, default_time="00:00:00")
+    end_dt = _parse_iso_datetime(end, default_time="23:59:59")
+
+    where = [Activity.account_id == user.account_id, Activity.due_at >= start_dt, Activity.due_at <= end_dt]
+    if completed is not None:
+        where.append(Activity.completed == completed)
+    if (user.role or "").lower() == "worker":
+        where.append(Activity.owner_user_id == user.id)
+    result = await ActivityManager.paginate_list(
+        where=tuple(where), page=page, limit=limit, session=session
+    )
+    return ListActivitySchema(
+        pagination=Pagination(limit=result.get("limit"), page=result.get("page"), total=result.get("total")),
+        activities=result.get("items"),
+    )
+
+
 @activity_router.get("/activities/{activity_id}/", response_model=ActivitySchema)
 async def get_activity(
     activity_id: int,
@@ -79,28 +114,7 @@ async def get_activities_list(
     )
 
 
-@activity_router.get("/activities/calendar/", response_model=ListActivitySchema)
-async def get_calendar_activities(
-    start: datetime = Query(...),
-    end: datetime = Query(...),
-    completed: Optional[bool] = Query(None),
-    user = Security(AuthService.get_current_user, scopes=["activities"]),
-    page: int = Query(1, ge=1),
-    limit: int = Query(100, le=500),
-    session: AsyncSession = Depends(get_session),
-) -> ListActivitySchema:
-    where = [Activity.account_id == user.account_id, Activity.due_at >= start, Activity.due_at <= end]
-    if completed is not None:
-        where.append(Activity.completed == completed)
-    if (user.role or "").lower() == "worker":
-        where.append(Activity.owner_user_id == user.id)
-    result = await ActivityManager.paginate_list(
-        where=tuple(where), page=page, limit=limit, session=session
-    )
-    return ListActivitySchema(
-        pagination=Pagination(limit=result.get("limit"), page=result.get("page"), total=result.get("total")),
-        activities=result.get("items"),
-    )
+ 
 
 
 @activity_router.post(
