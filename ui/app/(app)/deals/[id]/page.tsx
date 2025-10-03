@@ -22,6 +22,9 @@ export default function DealCardPage() {
   const params = useParams() as { id: string }
   const router = useRouter()
   const [deal, setDeal] = useState<Deal | null>(null)
+  const [draftDeal, setDraftDeal] = useState<Deal | null>(null)
+  const [dealDirty, setDealDirty] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [products, setProducts] = useState<DealProduct[]>([])
   const [services, setServices] = useState<DealService[]>([])
@@ -34,6 +37,9 @@ export default function DealCardPage() {
   const [users, setUsers] = useState<User[]>([])
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [stages, setStages] = useState<Stage[]>([])
+  const [showHistory, setShowHistory] = useState(false)
+  const [historyItems, setHistoryItems] = useState<any[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const id = Number(params.id)
 
@@ -41,6 +47,7 @@ export default function DealCardPage() {
     ;(async () => {
       const { data } = await api.get(`/api/v1/deals/${id}/`)
       setDeal(data as any)
+      setDraftDeal(data as any)
       if ((data as any).company_id) {
         const c = await api.get(`/api/v1/companies/${(data as any).company_id}/`)
         setCompany(c.data as any)
@@ -120,10 +127,41 @@ export default function DealCardPage() {
     const u = users.find(u => u.id === id)
     return u?.name || u?.email || '-'
   }
-  async function updateDealPatch(patch: Partial<Deal>) {
-    if (!deal) return
+  function updateDealDraft(patch: Partial<Deal>) {
+    if (!draftDeal) return
+    const next = { ...(draftDeal as any), ...patch }
+    setDraftDeal(next)
+    const orig = deal || {}
+    const keys = new Set([...Object.keys(next), ...Object.keys(orig as any)])
+    let changed = false
+    for (const k of keys) { if ((next as any)[k] !== (orig as any)[k]) { changed = true; break } }
+    setDealDirty(changed)
+  }
+
+  function buildDealPatch(): Partial<Deal> {
+    const patch: any = {}
+    if (!deal || !draftDeal) return patch
+    const keys = new Set([...Object.keys(draftDeal), ...Object.keys(deal)])
+    keys.forEach(k => { if ((draftDeal as any)[k] !== (deal as any)[k]) patch[k] = (draftDeal as any)[k] })
+    return patch
+  }
+
+  async function saveDealChanges() {
+    if (!dealDirty || !deal) return
+    const patch = buildDealPatch()
     const { data } = await api.patch(`/api/v1/deals/${deal.id}/`, patch)
     setDeal(data as any)
+    setDraftDeal(data as any)
+    setDealDirty(false)
+    setNotice('Сохранено')
+    setTimeout(()=>setNotice(null), 2000)
+  }
+
+  function cancelDealChanges() {
+    setDraftDeal(deal)
+    setDealDirty(false)
+    setNotice('Изменения отменены')
+    setTimeout(()=>setNotice(null), 2000)
   }
 
   function getProductName(id: number) {
@@ -174,13 +212,13 @@ export default function DealCardPage() {
   const amountsMatch = deal?.amount != null && Math.abs((deal.amount || 0) - summary.grand) < 0.01
 
   async function recalcDealAmount() {
-    if (!deal) return
+    if (!draftDeal) return
     // try to keep existing currency, otherwise take from first item
-    let currency = deal.currency
+    let currency = draftDeal.currency
     if (!currency) {
       currency = products[0]?.currency || services[0]?.currency || catalogProducts[0]?.currency || catalogServices[0]?.currency || 'RUB'
     }
-    await updateDealPatch({ amount: summary.grand, currency })
+    updateDealDraft({ amount: summary.grand, currency })
   }
 
   if (!deal) return <div className="cloud p-4">Загрузка...</div>
@@ -189,22 +227,43 @@ export default function DealCardPage() {
     <div className="space-y-3">
       <div className="cloud p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="text-lg font-semibold">{deal.name}</div>
-          <input className="cloud p-1" type="date" value={deal.expected_close_date || ''} onChange={e=>updateDealPatch({ expected_close_date: e.target.value })} />
-          <select className="cloud p-1" value={deal.stage_id || ''} onChange={e=>updateDealPatch({ stage_id: Number(e.target.value) })}>
+          <div className="text-lg font-semibold">{draftDeal?.name ?? deal.name}</div>
+          <input className="cloud p-1" type="date" value={draftDeal?.expected_close_date || ''} onChange={e=>updateDealDraft({ expected_close_date: e.target.value })} />
+          <select className="cloud p-1" value={draftDeal?.stage_id || ''} onChange={e=>updateDealDraft({ stage_id: Number(e.target.value) })}>
             {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
-        <button className="btn-primary" disabled={loading} onClick={onDelete}>Удалить</button>
+        <div className="flex items-center gap-3">
+          <button
+            className="text-blue-700 underline flex items-center gap-1"
+            onClick={async () => {
+              setShowHistory(true)
+              if (historyItems.length === 0) {
+                try {
+                  setHistoryLoading(true)
+                  const { data } = await api.get('/api/v1/history/', { params: { entity_type: 'deals', entity_id: id, page: 1, limit: 100 } })
+                  setHistoryItems((data as any).items || [])
+                } finally {
+                  setHistoryLoading(false)
+                }
+              }
+            }}
+            title="История изменений"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 1 0 9 9h-2a7 7 0 1 1-7-7v3l5-4-5-4v3z"/></svg>
+            История
+          </button>
+          <button className="btn-primary" disabled={loading} onClick={onDelete}>Удалить</button>
+        </div>
       </div>
       <div className="cloud p-4 grid grid-cols-2 gap-4 text-sm">
         <div>
           <div className="text-gray-500">Сумма</div>
           <div className="flex items-center gap-2">
-            <input className="cloud p-1 w-28" type="number" step="0.01" value={deal.amount ?? 0}
-              onChange={e=>updateDealPatch({ amount: Number(e.target.value) })} />
-            <input className="cloud p-1 w-20" placeholder="валюта" value={deal.currency || ''}
-              onChange={e=>updateDealPatch({ currency: e.target.value || undefined })} />
+            <input className="cloud p-1 w-28" type="number" step="0.01" value={draftDeal?.amount ?? 0}
+              onChange={e=>updateDealDraft({ amount: Number(e.target.value) })} />
+            <input className="cloud p-1 w-20" placeholder="валюта" value={draftDeal?.currency || ''}
+              onChange={e=>updateDealDraft({ currency: e.target.value || undefined })} />
             {amountsMatch ? (
               <span className="text-green-600" title="Сумма совпадает">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2l-3.5-3.5-1.4 1.4L9 19 20.3 7.7l-1.4-1.4z"/></svg>
@@ -213,22 +272,22 @@ export default function DealCardPage() {
               <button className="btn-primary" onClick={recalcDealAmount}>Рассчитать цену</button>
             )}
           </div>
-          <div className="text-xs text-gray-500 mt-1">Итого по позициям: {summary.itemsTotal.toFixed(2)} {deal.currency || ''}</div>
+          <div className="text-xs text-gray-500 mt-1">Итого по позициям: {summary.itemsTotal.toFixed(2)} {draftDeal?.currency || ''}</div>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-xs text-gray-500">Скидка на заказ:</span>
-            <input className="cloud p-1 w-20" type="number" value={deal.discount_value ?? 0}
-              onChange={e=>updateDealPatch({ discount_value: Number(e.target.value) })} />
-            <select className="cloud p-1" value={deal.discount_type || 'amount'} onChange={e=>updateDealPatch({ discount_type: e.target.value as any })}>
+            <input className="cloud p-1 w-20" type="number" value={draftDeal?.discount_value ?? 0}
+              onChange={e=>updateDealDraft({ discount_value: Number(e.target.value) })} />
+            <select className="cloud p-1" value={draftDeal?.discount_type || 'amount'} onChange={e=>updateDealDraft({ discount_type: e.target.value as any })}>
               <option value="amount">сумма</option>
               <option value="percent">%</option>
             </select>
-            <span className="text-xs text-gray-500">Итого: {summary.grand.toFixed(2)} {deal.currency || ''}</span>
+            <span className="text-xs text-gray-500">Итого: {summary.grand.toFixed(2)} {draftDeal?.currency || ''}</span>
           </div>
         </div>
         <div>
           <div className="text-gray-500">Ответственный</div>
           <div className="flex items-center gap-2">
-            <select className="cloud p-1" value={deal.owner_user_id || ''} onChange={e=>updateDealPatch({ owner_user_id: Number(e.target.value) })}>
+            <select className="cloud p-1" value={draftDeal?.owner_user_id || ''} onChange={e=>updateDealDraft({ owner_user_id: Number(e.target.value) })}>
               {users.map(u => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
             </select>
             {deal.owner_user_id ? (
@@ -241,7 +300,7 @@ export default function DealCardPage() {
         <div>
           <div className="text-gray-500">Компания</div>
           <div className="flex items-center gap-2">
-            <select className="cloud p-1" value={deal.company_id || ''} onChange={async e=>{ const v = e.target.value ? Number(e.target.value) : undefined; await updateDealPatch({ company_id: v }); if (v) { const c = await api.get(`/api/v1/companies/${v}/`); setCompany(c.data as any) } else { setCompany(null) } }}>
+            <select className="cloud p-1" value={draftDeal?.company_id || ''} onChange={async e=>{ const v = e.target.value ? Number(e.target.value) : undefined; updateDealDraft({ company_id: v }); if (v) { const c = await api.get(`/api/v1/companies/${v}/`); setCompany(c.data as any) } else { setCompany(null) } }}>
               <option value="">—</option>
               {companyOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -255,7 +314,7 @@ export default function DealCardPage() {
         <div>
           <div className="text-gray-500">Контакт</div>
           <div className="flex items-center gap-2">
-            <select className="cloud p-1" value={deal.contact_id || ''} onChange={async e=>{ const v = e.target.value ? Number(e.target.value) : undefined; await updateDealPatch({ contact_id: v }); if (v) { const c = await api.get(`/api/v1/contacts/${v}/`); setContact(c.data as any) } else { setContact(null) } }}>
+            <select className="cloud p-1" value={draftDeal?.contact_id || ''} onChange={async e=>{ const v = e.target.value ? Number(e.target.value) : undefined; updateDealDraft({ contact_id: v }); if (v) { const c = await api.get(`/api/v1/contacts/${v}/`); setContact(c.data as any) } else { setContact(null) } }}>
               <option value="">—</option>
               {contactOptions.map(c => <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>)}
             </select>
@@ -357,6 +416,66 @@ export default function DealCardPage() {
           </table>
         </div>
       </div>
+      {dealDirty ? (
+        <div className="fixed bottom-6 right-6 cloud p-3 flex items-center gap-2 z-50">
+          <button className="cloud px-3 py-1" onClick={cancelDealChanges}>Отменить</button>
+          <button className="btn-primary" onClick={saveDealChanges}>Сохранить (Ctrl+S)</button>
+        </div>
+      ) : null}
+      {notice ? (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 cloud px-3 py-2 z-50">{notice}</div>
+      ) : null}
+      {showHistory ? (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowHistory(false)}>
+          <div className="cloud p-4 w-full max-w-2xl max-h-[80vh] overflow-auto" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="font-medium">История изменений</div>
+              <div className="ml-auto" />
+              <button className="text-gray-600" onClick={()=>setShowHistory(false)}>✕</button>
+            </div>
+            {historyLoading ? (
+              <div className="p-2 text-sm">Загрузка...</div>
+            ) : (
+              <div className="space-y-3">
+                {historyItems.length === 0 ? (
+                  <div className="text-sm text-gray-500">Нет записей</div>
+                ) : (
+                  historyItems.map((h: any) => (
+                    <div key={h.id} className="border border-white/40 rounded p-2">
+                      <div className="text-xs text-gray-500 flex items-center gap-2">
+                        <span>{h.created_at ? new Date(h.created_at).toLocaleString() : ''}</span>
+                        <span>·</span>
+                        <span>{h.action === 'create' ? 'Создание' : h.action === 'update' ? 'Изменение' : h.action === 'delete' ? 'Удаление' : h.action}</span>
+                        {h.user_id ? (<><span>·</span><span>{userName(h.user_id)}</span></>) : null}
+                      </div>
+                      {Array.isArray(h.changes) && h.changes.length > 0 ? (
+                        <table className="w-full text-xs mt-2">
+                          <thead>
+                            <tr className="text-gray-500">
+                              <th className="text-left py-1 pr-2">Поле</th>
+                              <th className="text-left py-1 pr-2">Было</th>
+                              <th className="text-left py-1">Стало</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {h.changes.map((c: any, idx: number) => (
+                              <tr key={idx} className="border-t border-white/30">
+                                <td className="py-1 pr-2 align-top">{c.field}</td>
+                                <td className="py-1 pr-2 align-top">{String(c.old ?? '')}</td>
+                                <td className="py-1 align-top">{String(c.new ?? '')}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : null}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

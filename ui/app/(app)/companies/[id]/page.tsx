@@ -15,11 +15,17 @@ export default function CompanyCardPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [company, setCompany] = useState<Company | null>(null)
+  const [draft, setDraft] = useState<Company | null>(null)
+  const [dirty, setDirty] = useState(false)
   const [users, setUsers] = useState<User[]>([])
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [stages, setStages] = useState<Stage[]>([])
   const [deals, setDeals] = useState<Deal[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
+  const [notice, setNotice] = useState<string | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
+  const [historyItems, setHistoryItems] = useState<any[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   useEffect(() => {
     ;(async () => {
@@ -28,9 +34,25 @@ export default function CompanyCardPage() {
         api.get('/api/v1/users/', { params: { page: 1, limit: 100 } }),
       ])
       setCompany(c as any)
+      setDraft(c as any)
       setUsers((u as any).users || [])
     })()
   }, [id])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault()
+        if (dirty) saveChanges()
+      }
+      if (e.key === 'Escape' && dirty) {
+        e.preventDefault()
+        cancelChanges()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [dirty, draft, company])
 
   useEffect(() => {
     ;(async () => {
@@ -59,10 +81,46 @@ export default function CompanyCardPage() {
     })()
   }, [id])
 
-  async function updateCompanyPatch(patch: Partial<Company>) {
-    if (!company) return
+  function updateDraft(patch: Partial<Company>) {
+    if (!draft) return
+    const next = { ...(draft as any), ...patch }
+    setDraft(next)
+    // compare with original to set dirty
+    const orig = company || {}
+    const keys = new Set([...Object.keys(next), ...Object.keys(orig as any)])
+    let changed = false
+    for (const k of keys) {
+      if ((next as any)[k] !== (orig as any)[k]) { changed = true; break }
+    }
+    setDirty(changed)
+  }
+
+  function buildPatch(): Partial<Company> {
+    const patch: any = {}
+    if (!company || !draft) return patch
+    const keys = new Set([...Object.keys(draft), ...Object.keys(company)])
+    keys.forEach(k => {
+      if ((draft as any)[k] !== (company as any)[k]) patch[k] = (draft as any)[k]
+    })
+    return patch
+  }
+
+  async function saveChanges() {
+    if (!dirty) return
+    const patch = buildPatch()
     const { data } = await api.patch(`/api/v1/companies/${id}/`, patch)
     setCompany(data as any)
+    setDraft(data as any)
+    setDirty(false)
+    setNotice('Сохранено')
+    setTimeout(()=>setNotice(null), 2000)
+  }
+
+  function cancelChanges() {
+    setDraft(company)
+    setDirty(false)
+    setNotice('Изменения отменены')
+    setTimeout(()=>setNotice(null), 2000)
   }
 
   async function onDelete() {
@@ -99,44 +157,63 @@ export default function CompanyCardPage() {
       <div className="cloud p-3 flex items-center gap-2">
         <div className="font-medium">{company.name || 'Компания'}</div>
         <div className="ml-auto" />
+        <button
+          className="text-blue-700 underline flex items-center gap-1"
+          onClick={async () => {
+            setShowHistory(true)
+            if (historyItems.length === 0) {
+              try {
+                setHistoryLoading(true)
+                const { data } = await api.get('/api/v1/history/', { params: { entity_type: 'companies', entity_id: Number(id), page: 1, limit: 100 } })
+                setHistoryItems((data as any).items || [])
+              } finally {
+                setHistoryLoading(false)
+              }
+            }
+          }}
+          title="История изменений"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 1 0 9 9h-2a7 7 0 1 1-7-7v3l5-4-5-4v3z"/></svg>
+          История
+        </button>
         <button className="btn-primary" onClick={onDelete} disabled={loading}>{loading ? '...' : 'Удалить'}</button>
       </div>
 
       <div className="cloud p-3 grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label className="text-xs text-gray-500">Название</label>
-          <input className="w-full cloud p-2" value={company.name || ''} onChange={e=>updateCompanyPatch({ name: e.target.value })} />
+          <input className="w-full cloud p-2" value={draft?.name || ''} onChange={e=>updateDraft({ name: e.target.value })} />
         </div>
         <div>
           <label className="text-xs text-gray-500">Владелец</label>
-          <select className="w-full cloud p-2" value={company.owner_user_id || ''} onChange={e=>updateCompanyPatch({ owner_user_id: e.target.value ? Number(e.target.value) : undefined })}>
+          <select className="w-full cloud p-2" value={draft?.owner_user_id || ''} onChange={e=>updateDraft({ owner_user_id: e.target.value ? Number(e.target.value) : undefined })}>
             <option value="">Не указан</option>
             {users.map(u => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
           </select>
         </div>
         <div>
           <label className="text-xs text-gray-500">Сайт</label>
-          <input className="w-full cloud p-2" value={company.website || ''} onChange={e=>updateCompanyPatch({ website: e.target.value })} />
+          <input className="w-full cloud p-2" value={draft?.website || ''} onChange={e=>updateDraft({ website: e.target.value })} />
         </div>
         <div>
           <label className="text-xs text-gray-500">Email</label>
-          <input className="w-full cloud p-2" value={company.email || ''} onChange={e=>updateCompanyPatch({ email: e.target.value })} />
+          <input className="w-full cloud p-2" value={draft?.email || ''} onChange={e=>updateDraft({ email: e.target.value })} />
         </div>
         <div>
           <label className="text-xs text-gray-500">Телефон</label>
-          <input className="w-full cloud p-2" value={company.phone || ''} onChange={e=>updateCompanyPatch({ phone: e.target.value })} />
+          <input className="w-full cloud p-2" value={draft?.phone || ''} onChange={e=>updateDraft({ phone: e.target.value })} />
         </div>
         <div>
           <label className="text-xs text-gray-500">Страна</label>
-          <input className="w-full cloud p-2" value={company.country || ''} onChange={e=>updateCompanyPatch({ country: e.target.value })} />
+          <input className="w-full cloud p-2" value={draft?.country || ''} onChange={e=>updateDraft({ country: e.target.value })} />
         </div>
         <div>
           <label className="text-xs text-gray-500">Город</label>
-          <input className="w-full cloud p-2" value={company.city || ''} onChange={e=>updateCompanyPatch({ city: e.target.value })} />
+          <input className="w-full cloud p-2" value={draft?.city || ''} onChange={e=>updateDraft({ city: e.target.value })} />
         </div>
         <div className="md:col-span-2">
           <label className="text-xs text-gray-500">Адрес</label>
-          <input className="w-full cloud p-2" value={company.address || ''} onChange={e=>updateCompanyPatch({ address: e.target.value })} />
+          <input className="w-full cloud p-2" value={draft?.address || ''} onChange={e=>updateDraft({ address: e.target.value })} />
         </div>
       </div>
 
@@ -165,6 +242,56 @@ export default function CompanyCardPage() {
           </tbody>
         </table>
       </div>
+      {showHistory ? (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowHistory(false)}>
+          <div className="cloud p-4 w-full max-w-2xl max-h-[80vh] overflow-auto" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="font-medium">История изменений</div>
+              <div className="ml-auto" />
+              <button className="text-gray-600" onClick={()=>setShowHistory(false)}>✕</button>
+            </div>
+            {historyLoading ? (
+              <div className="p-2 text-sm">Загрузка...</div>
+            ) : (
+              <div className="space-y-3">
+                {historyItems.length === 0 ? (
+                  <div className="text-sm text-gray-500">Нет записей</div>
+                ) : (
+                  historyItems.map((h: any) => (
+                    <div key={h.id} className="border border-white/40 rounded p-2">
+                      <div className="text-xs text-gray-500 flex items-center gap-2">
+                        <span>{h.created_at ? new Date(h.created_at).toLocaleString() : ''}</span>
+                        <span>·</span>
+                        <span>{h.action === 'create' ? 'Создание' : h.action === 'update' ? 'Изменение' : h.action === 'delete' ? 'Удаление' : h.action}</span>
+                      </div>
+                      {Array.isArray(h.changes) && h.changes.length > 0 ? (
+                        <table className="w-full text-xs mt-2">
+                          <thead>
+                            <tr className="text-gray-500">
+                              <th className="text-left py-1 pr-2">Поле</th>
+                              <th className="text-left py-1 pr-2">Было</th>
+                              <th className="text-left py-1">Стало</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {h.changes.map((c: any, idx: number) => (
+                              <tr key={idx} className="border-t border-white/30">
+                                <td className="py-1 pr-2 align-top">{c.field}</td>
+                                <td className="py-1 pr-2 align-top">{String(c.old ?? '')}</td>
+                                <td className="py-1 align-top">{String(c.new ?? '')}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : null}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       <div className="cloud p-0 overflow-hidden">
         <div className="p-3 font-medium">Связанные активности</div>
@@ -191,6 +318,15 @@ export default function CompanyCardPage() {
           </tbody>
         </table>
       </div>
+      {dirty ? (
+        <div className="fixed bottom-6 right-6 cloud p-3 flex items-center gap-2 z-50">
+          <button className="cloud px-3 py-1" onClick={cancelChanges}>Отменить</button>
+          <button className="btn-primary" onClick={saveChanges}>Сохранить (Ctrl+S)</button>
+        </div>
+      ) : null}
+      {notice ? (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 cloud px-3 py-2 z-50">{notice}</div>
+      ) : null}
     </div>
   )
 }

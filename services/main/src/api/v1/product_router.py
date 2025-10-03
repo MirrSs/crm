@@ -81,7 +81,7 @@ async def create_product(
     async with transaction(session):
         data = product.model_dump(exclude_unset=True)
         data["account_id"] = user.account_id
-        response = await ProductManager.create(input_data=data, session=session)
+        response = await ProductManager.create(input_data=data, session=session, user_id=user.id, account_id=user.account_id)
     return response
 
 
@@ -100,6 +100,8 @@ async def update_product(
             session=session,
             pk=product_id,
             input_data=product.model_dump(exclude_unset=True),
+            user_id=user.id,
+            account_id=user.account_id,
         )
 
 
@@ -113,6 +115,6 @@ async def delete_product(
         obj = await ProductManager.retrieve(id=product_id, session=session)
         if getattr(obj, "account_id", None) != user.account_id:
             raise HTTPException(status_code=404, detail="Object not found")
-        return await ProductManager.delete(id=product_id, session=session)
+        return await ProductManager.delete(id=product_id, session=session, user_id=user.id, account_id=user.account_id)
 
 

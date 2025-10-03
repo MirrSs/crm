@@ -16,6 +16,7 @@ from models.custom_field_models import (
     CustomDictionaryValue,
     CustomFieldValue,
 )
+from models.history_model import History
 
 __all__ = [
     "Account",
@@ -35,4 +36,5 @@ __all__ = [
     "CustomDictionary",
     "CustomDictionaryValue",
     "CustomFieldValue",
+    "History",
 ]

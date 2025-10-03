@@ -81,7 +81,7 @@ async def create_service(
     async with transaction(session):
         data = service.model_dump(exclude_unset=True)
         data["account_id"] = user.account_id
-        response = await ServiceManager.create(input_data=data, session=session)
+        response = await ServiceManager.create(input_data=data, session=session, user_id=user.id, account_id=user.account_id)
     return response
 
 
@@ -100,6 +100,8 @@ async def update_service(
             session=session,
             pk=service_id,
             input_data=service.model_dump(exclude_unset=True),
+            user_id=user.id,
+            account_id=user.account_id,
         )
 
 
@@ -113,6 +115,6 @@ async def delete_service(
         obj = await ServiceManager.retrieve(id=service_id, session=session)
         if getattr(obj, "account_id", None) != user.account_id:
             raise HTTPException(status_code=404, detail="Object not found")
-        return await ServiceManager.delete(id=service_id, session=session)
+        return await ServiceManager.delete(id=service_id, session=session, user_id=user.id, account_id=user.account_id)
 
 

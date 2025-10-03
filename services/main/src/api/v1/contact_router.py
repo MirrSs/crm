@@ -3,6 +3,8 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.postgres.db import get_session
+from fastapi import Security
+from services.auth_service import AuthService
 from db.transaction import transaction
 from schemas.pagination_schema import Pagination
 from schemas.contact_schema import (
@@ -72,10 +74,10 @@ async def get_contacts_list(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_contact(
-    contact: CreateContactSchema, session: AsyncSession = Depends(get_session)
+    contact: CreateContactSchema, session: AsyncSession = Depends(get_session), user = Security(AuthService.get_current_user, scopes=["contacts"])
 ) -> ContactSchema:
     async with transaction(session):
-        response = await ContactManager.create(input_data=contact, session=session)
+        response = await ContactManager.create(input_data=contact, session=session, user_id=user.id, account_id=user.account_id)
     return response
 
 
@@ -84,12 +86,15 @@ async def update_contact(
     contact_id: int,
     contact: ContactSchema,
     session: AsyncSession = Depends(get_session),
+    user = Security(AuthService.get_current_user, scopes=["contacts"]),
 ):
     async with transaction(session):
         return await ContactManager.update(
             session=session,
             pk=contact_id,
             input_data=contact.model_dump(exclude_unset=True),
+            user_id=user.id,
+            account_id=user.account_id,
         )
 
 
@@ -97,8 +102,9 @@ async def update_contact(
 async def delete_contact(
     contact_id: int,
     session: AsyncSession = Depends(get_session),
+    user = Security(AuthService.get_current_user, scopes=["contacts"]),
 ):
     async with transaction(session):
-        return await ContactManager.delete(id=contact_id, session=session)
+        return await ContactManager.delete(id=contact_id, session=session, user_id=user.id, account_id=user.account_id)
 
 

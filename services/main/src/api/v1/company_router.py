@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.postgres.db import get_session
 from db.transaction import transaction
+from fastapi import Security
+from services.auth_service import AuthService
 from schemas.pagination_schema import Pagination
 from schemas.company_schema import (
     CreateCompanySchema,
@@ -72,10 +74,12 @@ async def get_companies_list(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_company(
-    company: CreateCompanySchema, session: AsyncSession = Depends(get_session)
+    company: CreateCompanySchema,
+    session: AsyncSession = Depends(get_session),
+    user = Security(AuthService.get_current_user, scopes=["companies"]),
 ) -> CompanySchema:
     async with transaction(session):
-        response = await CompanyManager.create(input_data=company, session=session)
+        response = await CompanyManager.create(input_data=company, session=session, user_id=user.id, account_id=user.account_id)
     return response
 
 
@@ -84,12 +88,15 @@ async def update_company(
     company_id: int,
     company: CompanySchema,
     session: AsyncSession = Depends(get_session),
+    user = Security(AuthService.get_current_user, scopes=["companies"]),
 ):
     async with transaction(session):
         return await CompanyManager.update(
             session=session,
             pk=company_id,
             input_data=company.model_dump(exclude_unset=True),
+            user_id=user.id,
+            account_id=user.account_id,
         )
 
 
@@ -97,8 +104,9 @@ async def update_company(
 async def delete_company(
     company_id: int,
     session: AsyncSession = Depends(get_session),
+    user = Security(AuthService.get_current_user, scopes=["companies"]),
 ):
     async with transaction(session):
-        return await CompanyManager.delete(id=company_id, session=session)
+        return await CompanyManager.delete(id=company_id, session=session, user_id=user.id, account_id=user.account_id)
 
 

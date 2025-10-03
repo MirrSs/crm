@@ -15,6 +15,7 @@ from api.v1.service_router import service_router
 from api.v1.deal_items_router import deal_items_router
 from api.v1.custom_field_router import custom_field_router
 from api.v1.stats_router import stats_router
+from api.v1.history_router import history_router
 
 
 api_v1 = APIRouter(prefix="/v1")
@@ -35,4 +36,5 @@ api_v1.include_router(service_router)
 api_v1.include_router(deal_items_router)
 api_v1.include_router(custom_field_router)
 api_v1.include_router(stats_router)
+api_v1.include_router(history_router)
 

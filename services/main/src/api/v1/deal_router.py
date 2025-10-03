@@ -116,7 +116,7 @@ async def create_deal(
     async with transaction(session):
         data = deal.model_dump(exclude_unset=True)
         data["account_id"] = user.account_id
-        response = await DealManager.create(input_data=data, session=session)
+        response = await DealManager.create(input_data=data, session=session, user_id=user.id, account_id=user.account_id)
     return response
 
 
@@ -136,6 +136,8 @@ async def update_deal(
             session=session,
             pk=deal_id,
             input_data=deal.model_dump(exclude_unset=True),
+            user_id=user.id,
+            account_id=user.account_id,
         )
 
 
@@ -159,7 +161,7 @@ async def delete_deal(
         # 2) Remove deal items (products/services) that depend on this deal
         await session.execute(delete(DealProduct).where(DealProduct.deal_id == deal_id))
         await session.execute(delete(DealService).where(DealService.deal_id == deal_id))
-        return await DealManager.delete(id=deal_id, session=session)
+        return await DealManager.delete(id=deal_id, session=session, user_id=user.id, account_id=user.account_id)
 
 
 @deal_router.patch("/deals/{deal_id}/move/", response_model=DealSchema)
@@ -179,6 +181,8 @@ async def move_deal(
             session=session,
             pk=deal_id,
             input_data={"stage_id": stage_id, "order_index": order_index},
+            user_id=user.id,
+            account_id=user.account_id,
         )
 
 
