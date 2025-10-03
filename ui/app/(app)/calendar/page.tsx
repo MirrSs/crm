@@ -37,6 +37,7 @@ const typeRu: Record<string, string> = {
 export default function CalendarPage() {
   const [viewDate, setViewDate] = useState<Date>(() => new Date())
   const [mineOnly, setMineOnly] = useState<boolean>(false)
+  const [showCompleted, setShowCompleted] = useState<boolean>(false)
   const [role, setRole] = useState<'owner'|'manager'|'worker'>('worker')
   const [me, setMe] = useState<{ id: number; name?: string; account_id?: number } | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
@@ -107,7 +108,8 @@ export default function CalendarPage() {
     const meId = me?.id
     const canToggle = role === 'owner' || role === 'manager'
     const filterMine = (role === 'worker' && true) || (canToggle && mineOnly)
-    const acts = filterMine ? activities.filter(a => a.owner_user_id === meId) : activities
+    const baseActs = filterMine ? activities.filter(a => a.owner_user_id === meId) : activities
+    const acts = showCompleted ? baseActs : baseActs.filter(a => !a.completed)
     const dls = filterMine ? deals.filter(d => d.owner_user_id === meId) : deals
     return [
       ...acts.map(a => ({
@@ -125,7 +127,7 @@ export default function CalendarPage() {
         kind: 'deal' as const,
       }))
     ]
-  }, [activities, deals, mineOnly, role, me])
+  }, [activities, deals, mineOnly, role, me, showCompleted])
 
   function toDateString(d: Date) { return format(d, 'yyyy-MM-dd') }
 
@@ -223,14 +225,20 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3 cloud p-3">
+      <div className="flex justify-between items-center gap-3 cloud p-3">
         <div className="font-medium">Календарь</div>
+        <div className="flex items-center gap-2">
         {(role === 'owner' || role === 'manager') && (
           <label className="ml-auto flex items-center gap-2 text-sm">
             <input className="accent-peach-500" style={{ accentColor: '#f4a261' }} type="checkbox" checked={mineOnly} onChange={e=>setMineOnly(e.target.checked)} />
             Показывать только мои
           </label>
         )}
+        <label className="flex items-center gap-2 text-sm ml-auto">
+          <input className="accent-peach-500" style={{ accentColor: '#f4a261' }} type="checkbox" checked={showCompleted} onChange={e=>setShowCompleted(e.target.checked)} />
+          Показывать выполненные
+        </label>
+        </div>
       </div>
       <div className="">
         <div className="flex items-center justify-between mb-3">
