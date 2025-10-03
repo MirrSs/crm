@@ -227,7 +227,7 @@ export default function CalendarPage() {
         <div className="font-medium">Календарь</div>
         {(role === 'owner' || role === 'manager') && (
           <label className="ml-auto flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={mineOnly} onChange={e=>setMineOnly(e.target.checked)} />
+            <input className="accent-peach-500" style={{ accentColor: '#f4a261' }} type="checkbox" checked={mineOnly} onChange={e=>setMineOnly(e.target.checked)} />
             Показывать только мои
           </label>
         )}

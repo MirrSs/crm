@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, status, Query
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import update, delete, and_
 
 from db.postgres.db import get_session
 from fastapi import Security
@@ -15,6 +16,8 @@ from schemas.deal_schema import (
 )
 from managers.deal_manager import DealManager
 from models.deal_model import Deal
+from models.activity_model import Activity
+from models.deal_item_models import DealProduct, DealService
 from datetime import date
 
 
@@ -147,6 +150,15 @@ async def delete_deal(
         if getattr(obj, "account_id", None) != user.account_id:
             from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="Object not found")
+        # 1) Unlink activities referencing this deal to avoid FK violations
+        await session.execute(
+            update(Activity)
+            .where(and_(Activity.deal_id == deal_id, Activity.account_id == user.account_id))
+            .values(deal_id=None)
+        )
+        # 2) Remove deal items (products/services) that depend on this deal
+        await session.execute(delete(DealProduct).where(DealProduct.deal_id == deal_id))
+        await session.execute(delete(DealService).where(DealService.deal_id == deal_id))
         return await DealManager.delete(id=deal_id, session=session)
 
 
