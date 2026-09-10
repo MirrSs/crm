@@ -202,14 +202,14 @@ export default function DealCardPage() {
     const productsSum = products.reduce((acc, it) => acc + calcProductLineTotal(it), 0)
     const servicesSum = services.reduce((acc, it) => acc + calcServiceLineTotal(it), 0)
     const itemsTotal = round2(productsSum + servicesSum)
-    const orderType = deal?.discount_type
-    const orderValue = deal?.discount_value || 0
+    const orderType = draftDeal?.discount_type
+    const orderValue = draftDeal?.discount_value || 0
     const orderDiscVal = orderType && orderValue ? (orderType === 'percent' ? itemsTotal * (orderValue / 100) : orderValue) : 0
     const grand = round2(Math.max(0, itemsTotal - orderDiscVal))
     return { productsSum, servicesSum, itemsTotal, orderDiscVal, grand }
   })()
 
-  const amountsMatch = deal?.amount != null && Math.abs((deal.amount || 0) - summary.grand) < 0.01
+  const amountsMatch = draftDeal?.amount != null && Math.abs((draftDeal.amount || 0) - summary.grand) < 0.01
 
   async function recalcDealAmount() {
     if (!draftDeal) return

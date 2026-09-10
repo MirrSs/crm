@@ -25,7 +25,7 @@ export default function SidebarFooter() {
     // Очистить access токен, удалить refresh cookie невозможно с клиента, но можно переписать/попросить бэкенд
     if (typeof window !== 'undefined') sessionStorage.removeItem('access_token')
     // Мягкий редирект на логин
-    window.location.href = '/auth/login'
+    window.location.href = '/sign-in'
   }
 
   const displayName = user?.name || user?.email || 'Пользователь'

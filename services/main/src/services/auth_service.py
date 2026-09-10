@@ -180,7 +180,7 @@ class AuthService:
             headers={"WWW-Authenticate": authenticate_value},
         )
         try:
-            payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=["HS256"])
+            payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=["HS256"], options={"verify_sub": False})
             user_id: str = payload.get("sub")
             if user_id is None:
                 raise credentials_exception

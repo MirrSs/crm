@@ -9,7 +9,7 @@ class CreateDealSchema(BaseModel):
     amount: Optional[float] = None
     currency: Optional[str] = Field(default=None, max_length=8)
     expected_close_date: Optional[date] = None
-    account_id: int
+    account_id: Optional[int] = None
     company_id: Optional[int] = None
     contact_id: Optional[int] = None
     pipeline_id: int

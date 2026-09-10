@@ -40,7 +40,6 @@ origins = [
     "http://localhost:4173",
     "http://192.168.1.201:5173",
     "http://185.246.64.164:4173",
-    "https://erp.ar-fashion.com",
     "https://ilya.p.radis.io"
 ]
 
@@ -51,7 +50,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 @app.get("/ping/")
 async def healthcheck():
